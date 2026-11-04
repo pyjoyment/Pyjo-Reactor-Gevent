@@ -50,9 +50,11 @@ jobs:
           fi
 
   # The whole suite of Pyjoyment on this reactor, as a reactor has to pass all
-  # of it, and the test of the reactor itself.
+  # of it, and the test of the reactor itself, on both loops of gevent, of
+  # libev and of libuv, which GEVENT_LOOP selects, as they differ in what they
+  # report and in what order; libuv-cffi needs cffi, which the group dev has.
   prove:
-    name: prove (python ${{ matrix.python }})
+    name: prove (python ${{ matrix.python }}, ${{ matrix.loop }})
     needs: pyjoyment
 
     strategy:
@@ -63,9 +65,15 @@ jobs:
           - "3.13"
           - "3.14"
           - "3.15"
+        loop:
+          - libev-cext
+          - libuv-cffi
 
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 15
+
+    env:
+      GEVENT_LOOP: ${{ matrix.loop }}
 
     steps:
       - name: Checkout
@@ -147,7 +155,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: junit-prove (python ${{ matrix.python }})
+          name: junit-prove (python ${{ matrix.python }}, ${{ matrix.loop }})
           path: junit/*.xml
           if-no-files-found: ignore
           retention-days: 7

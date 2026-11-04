@@ -23,8 +23,10 @@ classifiers = [
 Homepage = "https://github.com/pyjoyment/Pyjo-Reactor-Gevent"
 Documentation = "https://pyjoyment.readthedocs.io/projects/pyjo-reactor-gevent/en/stable/"
 
-# Sphinx of docs/, which Read the Docs and the workflow Docs install with uv sync --group docs
+# cffi for the loop of libuv of gevent, GEVENT_LOOP=libuv-cffi, which the tests run too, as gevent depends on it on
+# Windows only; Sphinx of docs/, which Read the Docs and the workflow Docs install with uv sync --group docs
 [dependency-groups]
+dev = ["cffi>=2.1.1"]
 docs = ["sphinx>=9.2.0"]
 
 # The documentation is built with Python 3.14 of Read the Docs and 3.15 of the workflow Docs, not with the lowest Python
