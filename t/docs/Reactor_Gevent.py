@@ -26,7 +26,6 @@ with subtest('Synopsis'):
         reactor.one_tick()
         reactor.remove(first)
     ok('First handle is writable' in output.getvalue().splitlines(), 'first handle')
-    reactor.close()
 
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
@@ -68,6 +67,5 @@ with subtest('Synopsis'):
     ok('First handle is readable' not in lines, 'not readable')
     for sock in (first, peer, second, other):
         sock.close()
-    reactor.close()
 
 done_testing()

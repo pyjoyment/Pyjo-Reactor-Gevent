@@ -23,8 +23,6 @@ loop of libev or libuv watches the handles and runs the timers, so that the
 servers of Pyjoyment, `daemon`, `prefork` and `prethread`, and its user agent
 run along with the greenlets of a program of gevent.
 
-The reactor is not implemented yet: this is the template of the distribution.
-
 ## Installation
 
 From [PyPI](https://pypi.org/project/Pyjo-Reactor-Gevent/), with
@@ -55,6 +53,22 @@ Select the reactor with `PYJO_REACTOR` before `Pyjo.IOLoop` is loaded:
 PYJO_REACTOR=Pyjo.Reactor.Gevent python myapp.py daemon
 PYJO_REACTOR=Pyjo.Reactor.Gevent python myapp.py prefork
 ```
+
+The reactor runs in the greenlet that starts it, and the other greenlets of the
+program run while it waits for events. A blocking request of the user agent
+waits in the greenlet that makes it, without blocking the others.
+
+gevent runs on libev by default. Its loop of libuv needs
+[cffi](https://pypi.org/project/cffi/):
+
+```sh
+pip install Pyjo-Reactor-Gevent cffi
+GEVENT_LOOP=libuv-cffi PYJO_REACTOR=Pyjo.Reactor.Gevent python myapp.py daemon
+```
+
+With `gevent.monkey.patch_all()`, the threads of the program are greenlets, so
+each greenlet has a `Pyjo.IOLoop.singleton` of its own, and
+`Pyjo.Server.Prethread` and `Pyjo.IOLoop.ChildProcess` do not work.
 
 ## Examples
 
@@ -125,6 +139,61 @@ with (
 $ python examples/loopback_gevent.py
 Pyjo_Reactor_Gevent gevent
 200 Your Pyjo is working!
+```
+
+`examples/greenlets_gevent.py` is a server of Pyjoyment in the main greenlet,
+along with two greenlets of the application that request it, one with a socket
+of gevent and one with a blocking request of the user agent of Pyjoyment:
+
+```python
+import os
+
+
+# The reactor of Pyjoyment on gevent, selected before Pyjo.IOLoop is loaded
+os.environ['PYJO_REACTOR'] = 'Pyjo.Reactor.Gevent'
+
+import Pyjo.HelloWorld  # noqa: E402
+import Pyjo.IOLoop  # noqa: E402
+import Pyjo.Server.Daemon  # noqa: E402
+import Pyjo.UserAgent  # noqa: E402
+
+import gevent  # noqa: E402
+import gevent.socket  # noqa: E402
+
+
+# A greenlet with a socket of gevent, which waits in the hub of gevent, where the server of Pyjoyment runs
+def with_socket(port):
+    with gevent.socket.create_connection(('127.0.0.1', port)) as sock:
+        sock.sendall(b'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n')
+        response = b''
+        while b'\r\n' not in response and (chunk := sock.recv(4096)):
+            response += chunk
+    status = response.split(b'\r\n')[0].decode()
+    return f'gevent.socket: {status}'
+
+
+# A greenlet with a blocking request of the user agent of Pyjoyment, whose event loop of its own waits in the greenlet
+def with_user_agent(port):
+    with Pyjo.UserAgent.new() as ua:
+        tx = ua.get(f'http://127.0.0.1:{port}/')
+    return f'Pyjo.UserAgent: {tx.result.code} {tx.result.text}'
+
+
+# The server, on a port that the system picks, which runs in the main greenlet until the greenlets are done, and closes its
+# listen sockets at the end of the block
+with Pyjo.Server.Daemon.new(app=Pyjo.HelloWorld.new(), listen=['http://127.0.0.1'], silent=True) as daemon:
+    port = daemon.start().ports()[0]
+    greenlets = [gevent.spawn(with_socket, port), gevent.spawn(with_user_agent, port)]
+    gevent.spawn(lambda: (gevent.joinall(greenlets), Pyjo.IOLoop.stop()))
+    Pyjo.IOLoop.start()
+    for greenlet in greenlets:
+        print(greenlet.value)
+```
+
+```console
+$ python examples/greenlets_gevent.py
+gevent.socket: HTTP/1.1 200 OK
+Pyjo.UserAgent: 200 Your Pyjo is working!
 ```
 
 ## Documentation

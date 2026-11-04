@@ -38,3 +38,16 @@ gevent:
     $ python examples/loopback_gevent.py
     Pyjo_Reactor_Gevent gevent
     200 Your Pyjo is working!
+
+``examples/greenlets_gevent.py`` is a server of Pyjoyment in the main greenlet,
+along with two greenlets of the application that request it, one with a socket
+of gevent and one with a blocking request of the user agent of Pyjoyment:
+
+    .. include:: ../examples/greenlets_gevent.py
+       :code: python
+
+.. code-block:: console
+
+    $ python examples/greenlets_gevent.py
+    gevent.socket: HTTP/1.1 200 OK
+    Pyjo.UserAgent: 200 Your Pyjo is working!

@@ -14,30 +14,88 @@ what each of their loops needed.
 
 ## How it works
 
-The reactor is not implemented yet: the module is the stub of the template,
-whose constructor raises `NotImplementedError`, so that nothing falls back to
-`Pyjo.Reactor.Poll` in the meantime. What it is to be:
-
-- A class of its own on `Pyjo.Reactor.Poll`, as `Pyjo.Reactor.Twisted` is,
-  whose watchers of I/O and timers are the watchers of the loop of the hub of
-  gevent, `gevent.get_hub().loop`, `loop.io` and `loop.timer`, of libev or of
-  libuv, as `GEVENT_LOOP` selects, and both are to be tested.
-- What the reactor is for is the servers of Pyjoyment, `daemon`, `prefork` and
-  `prethread`, and its user agent, in a program of gevent, along with its
-  greenlets: `start` and `one_tick` run the hub from the greenlet that calls
-  them, and a blocking request of the user agent in a greenlet of the
-  application waits for its response without blocking the other greenlets.
-- What is to be found out and written down here: how `start`, `stop` and
-  `one_tick` run the hub, from the main greenlet and from another one; the
-  threads of `Pyjo.Server.Prethread`, each with a hub of its own; the child
-  of a fork, as a worker of `Pyjo.Server.Prefork`, and the `reinit` of the
-  loop; the signals of the hub and the wakeup fd of the signals, which a
-  worker of `Pyjo.Server.Prefork` sets; the program with and without
-  `gevent.monkey`; and what differs from `Pyjo.Reactor.Poll` in the order of
-  the events, as Pyjo-Reactor-Uvloop found for libuv.
-- gevent 26.9.0 has wheels for CPython 3.12 to 3.15, with no free-threaded
-  build and no PyPy, so the matrix of Tests has neither, unlike the one of
-  Pyjoyment.
+- It is a subclass of `Pyjo.Reactor.Poll`, as `Pyjo.Reactor.Twisted` is, whose
+  watchers of I/O and timers are those of the loop of the hub of gevent,
+  `reactor.hub.loop`: a `loop.io` for each handle and a `loop.timer` for each
+  timer, of libev or of libuv, as `GEVENT_LOOP` selects. Unlike the reactor of
+  Twisted, the loop is not unique in a process: any number of reactors share
+  the hub of the thread that makes them, as each blocking user agent makes one
+  of its own, and the threads of `Pyjo.Server.Prethread` have hubs of their
+  own, as `gevent.get_hub()` is one for each thread.
+- The loop calls the watchers in the hub, where a callback of Pyjoyment could
+  not wait for anything of gevent, so the watchers only note the handle or the
+  timer and wake the greenlet that waits for the reactor with `run_callback`,
+  which gevent runs in the watcher prepare of the next iteration, before it
+  polls again: the greenlet gets all the events of an iteration at once. The
+  callbacks of Pyjoyment run in the greenlet that called `start` or
+  `one_tick`, which waits with `hub.switch()`, so a callback can recurse into
+  the reactor, as a blocking request does, or wait for gevent, and the other
+  greenlets run meanwhile. `stop` wakes the greenlet up, also from another
+  greenlet, and `_wake`, of the cleanups of finalizers from any thread, does
+  with `run_callback_threadsafe`. gevent raises `BlockingSwitchOutError` when
+  the reactor runs in the hub itself.
+- `one_tick` follows the one of `Pyjo.Reactor.Poll`: it waits at most half a
+  second, on a timer of the reactor, or for one iteration of the loop with a
+  timer of no time when an event is ready already, as the poll of no time of
+  the reactor of poll, then calls the callbacks of I/O, in the order in which
+  the handles were added, and of the timers, in the order in which they were
+  made. libev calls the watchers of an iteration in the reverse order of its
+  backend, and libuv in its order: on Linux, a byte of the manager of
+  `Pyjo.Server.Prethread` that stops the worker came before the connection
+  that the worker had to accept, so it closed its listen socket without the
+  request. A timer of no time, as `next_tick`, has no timer of the loop: it is
+  due at once, so that one that a callback of I/O adds runs after the I/O of
+  the same tick, as in the reactor of poll, and not after the I/O of the next
+  iteration, which accepted a second connection before the limit of
+  connections applied. libev does not repeat a timer with no interval, so a
+  recurring timer of no time is due again at each tick too.
+- The watchers of the loop are not referenced, so that a reactor that does not
+  run does not keep a program of gevent alive; its timer of half a second is,
+  while a greenlet waits, or the hub would end with `LoopExit`. A handle that
+  is ready while nobody waits for the reactor is not watched until somebody
+  does, as the loop would report it on each iteration that the other greenlets
+  make and keep the hub busy.
+- A timer is started with `update=True`, as libev and libuv take the time of
+  the start of the iteration, which the callbacks may have taken long after,
+  and with its time as its interval, so that `again` restarts it with
+  `ev_timer_again` or `uv_timer_again`; the callback stops one that is not
+  recurring.
+- The callbacks of the loop refer to the reactor weakly, as the loop lives as
+  long as the thread, and a finalizer stops the watchers of a reactor that is
+  freed, in the thread of the hub, with `run_callback_threadsafe` from
+  another one.
+- The child of a fork, as a worker of `Pyjo.Server.Prefork`, calls
+  `gevent.hub.reinit()`, from `os.register_at_fork`, which gevent does itself
+  for `gevent.os.fork` only, the `os.fork` of `gevent.monkey` too, where it is
+  not called again. libev of the child would share the epoll of the parent.
+- The signals need no relay, as uvloop does: gevent sets no wakeup fd of its
+  own, so the socket pair that a worker of `Pyjo.Server.Prefork` and
+  `Pyjo.Server.Daemon` set gets the byte of the signal from the handler of C
+  of Python, and the handler of Python runs before the callback of its
+  watcher, which runs code of Python. libuv checks the signals only every 300
+  milliseconds itself.
+- libuv sets a handle to the non-blocking mode when it makes the watcher, and
+  never back, which a terminal shares with the shell, so the reactor sets a
+  handle that was blocking back after `loop.io`, as Pyjo-Reactor-Uvloop does.
+- On an error of a handle, as a pipe whose reader has closed it, libuv of
+  Linux stops the watcher and calls it once with a status, which gevent passes
+  as events below zero, while it takes the watcher for active still, so the
+  next start did nothing. The reactor takes the handle for readable and
+  writable, as `Pyjo.Reactor.Poll` does, and starts the watcher again at the
+  next wait, so that the callback is called for as long as the error lasts.
+- The loops of cffi, `libev-cffi` and `libuv-cffi`, need cffi, which gevent
+  depends on only on Windows, so the group `dev` has it, and the matrix of
+  Tests runs both `libev-cext` and `libuv-cffi`. gevent 26.9.0 has wheels for
+  CPython 3.12 to 3.15, with no free-threaded build and no PyPy, so the matrix
+  has neither, unlike the one of Pyjoyment.
+- With `gevent.monkey.patch_all()`, `threading` takes a greenlet for a thread,
+  so `Pyjo.IOLoop.singleton` and the deferred cleanups of `Pyjo.Reactor` are
+  of each greenlet, and the threads of `Pyjo.Server.Prethread` are greenlets,
+  which hang. `subprocess` and the handler of `SIGCHLD` of gevent reap the
+  children, so `Pyjo.IOLoop.ChildProcess` does not get their status. The rest
+  of the suite of Pyjoyment passes with it, and a subtest of
+  `t/Reactor_Gevent.py` runs a server and blocking requests in greenlets with
+  it, but CI does not run the suite with it.
 
 ## Development
 
@@ -134,11 +192,15 @@ Pyjoyment of `uv.lock`:
 mise exec -- uv run --group docs --with-editable ../Pyjoyment sphinx-build -W --keep-going -b html docs docs/_build/html
 ```
 
-`t/Reactor_Gevent.py` is to be `t/Pyjo/Reactor_Poll.py` of Pyjoyment, the port
-of `t/mojo/reactor_poll.t` of Mojolicious, in the subtests of 9.53, with
-subtests of its own for the hub of gevent, as `t/Reactor_Uvloop.py` of
-Pyjo-Reactor-Uvloop and `t/Reactor_Twisted.py` of Pyjo-Reactor-Twisted have
-them for their loops; it is a stub of the template now.
+`t/Reactor_Gevent.py` is `t/Pyjo/Reactor_Poll.py` of Pyjoyment, the port of
+`t/mojo/reactor_poll.t` of Mojolicious, in the subtests of 9.53, with subtests
+of its own for the hub of gevent: the hub of a thread, the other greenlets
+while the reactor waits, a reactor in another greenlet, a callback that waits
+for gevent, blocking requests in greenlets, the reactor in the hub, a ready
+handle while the reactor does not run, the order of the events, a reactor that
+is freed, the child of a fork, the wakeup fd of the signals, the blocking mode
+of a handle, the writer of a pipe whose reader has closed it, and
+`gevent.monkey`. CI runs it on both loops.
 `t/docs/Reactor_Gevent.py` runs the synopsis of the module, in both forms, as
 `t/docs` of Pyjoyment does.
 

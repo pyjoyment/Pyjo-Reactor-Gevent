@@ -71,4 +71,16 @@ with subtest('loopback_gevent.py'):
     is_ok(result.stderr, '', 'nothing on the standard error')
     is_ok(result.returncode, 0, 'the server and the user agent closed at the end')
 
+with subtest('greenlets_gevent.py'):
+    result = subprocess.run(
+        [sys.executable, os.path.join(EXAMPLES, 'greenlets_gevent.py')], capture_output=True, text=True, timeout=60
+    )
+    is_ok(
+        result.stdout,
+        'gevent.socket: HTTP/1.1 200 OK\nPyjo.UserAgent: 200 Your Pyjo is working!\n',
+        'a socket of gevent and the user agent of Pyjoyment in greenlets, along with the server of Pyjoyment',
+    )
+    is_ok(result.stderr, '', 'nothing on the standard error')
+    is_ok(result.returncode, 0, 'the server closed at the end')
+
 done_testing()
