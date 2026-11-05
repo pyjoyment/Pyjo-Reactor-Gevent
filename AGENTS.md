@@ -64,6 +64,18 @@ what each of their loops needed.
   long as the thread, and a finalizer stops the watchers of a reactor that is
   freed, in the thread of the hub, with `run_callback_threadsafe` from
   another one.
+- `Pyjo.Reactor._finalize` defers the cleanup of a finalizer that runs below a
+  frame of a reactor or of its event loop, since pyjoyment/Pyjoyment#534,
+  which takes the file of the module of the class of the reactor,
+  `Pyjo/Reactor/Gevent.py`, wherever it is installed, and the modules of
+  `event_loop_modules`, which names `gevent`. The hub runs its loop in a
+  greenlet of its own, whose frames are not below those of the greenlet of
+  the reactor: a finalizer of `Pyjo.IOLoop.TLS` that the garbage collector
+  ran in `_run_callbacks` of the loop of gevent, below `Hub.run` only, closed
+  its socket in the middle of the callbacks of the loop, in
+  `t/Pyjo/IOLoop_TLS.py` of Pyjoyment. `greenlet` is not named: it is a C
+  extension, and a probe of `_finalize` over the suite of Pyjoyment on both
+  loops found no frame of it below any of its calls (#2).
 - The child of a fork, as a worker of `Pyjo.Server.Prefork`, calls
   `gevent.hub.reinit()`, from `os.register_at_fork`, which gevent does itself
   for `gevent.os.fork` only, the `os.fork` of `gevent.monkey` too, where it is

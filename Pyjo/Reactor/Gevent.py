@@ -140,6 +140,10 @@ class Pyjo_Reactor_Gevent(Pyjo.Reactor.Poll.object):
     :mod:`Pyjo.Reactor.Poll` and implements the following new ones.
     """
 
+    # Not in Mojolicious: gevent, whose hub runs the watchers and the timers of the reactor, and whose code a finalizer of
+    # the garbage collector may interrupt
+    event_loop_modules = ('gevent',)
+
     _timers: dict[str, _Timer]  # pyright: ignore[reportIncompatibleVariableOverride]
 
     hub: Any
