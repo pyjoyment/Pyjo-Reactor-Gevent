@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "Pyjo-Reactor-Gevent"
-version = "0.1.0.dev1"
+version = "0.1.0"
 description = "Low level event reactor with gevent support for Pyjoyment."
 readme = "README.md"
 license = "Artistic-2.0"
