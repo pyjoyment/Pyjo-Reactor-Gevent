@@ -221,7 +221,6 @@ of a handle, the writer of a pipe whose reader has closed it, and
 `t/docs/Reactor_Gevent.py` runs the synopsis of the module, in both forms, as
 `t/docs` of Pyjoyment does.
 
-
 ## Releases
 
 The releases are those of Pyjoyment, with its workflows: a release is a tag of
