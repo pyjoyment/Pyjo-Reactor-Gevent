@@ -34,6 +34,11 @@ docs = ["sphinx>=9.2.0"]
 [tool.uv.dependency-groups]
 docs = { requires-python = ">=3.14" }
 
+# Until the release of Pyjoyment after 0.2.0: event_loop_modules of a reactor, below whose frames a finalizer defers its
+# cleanup (pyjoyment/Pyjoyment#534)
+[tool.uv.sources]
+pyjoyment = { git = "https://github.com/pyjoyment/Pyjoyment", branch = "main" }
+
 # Only the module: the packages Pyjo and Pyjo.Reactor are those of Pyjoyment, whose namespace extend_path keeps open
 [tool.hatch.build.targets.wheel]
 only-include = ["Pyjo/Reactor/Gevent.py"]
