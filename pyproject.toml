@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pyjoyment/Pyjo-Reactor-Gevent"
+Homepage = "https://pyjoyment.dev/"
 Documentation = "https://pyjoyment.readthedocs.io/projects/pyjo-reactor-gevent/en/stable/"
 
 # cffi for the loop of libuv of gevent, GEVENT_LOOP=libuv-cffi, which the tests run too, as gevent depends on it on
