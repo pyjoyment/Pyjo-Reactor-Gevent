@@ -11,7 +11,7 @@ license = "Artistic-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Piotr Roszatycki", email = "piotr.roszatycki@gmail.com" }]
 requires-python = ">=3.12"
-dependencies = ["Pyjoyment>=0.3.0", "gevent>=26.9.0"]
+dependencies = ["Pyjoyment>=0.4.0", "gevent>=26.9.0"]
 keywords = ["pyjoyment", "reactor", "gevent", "greenlet"]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
